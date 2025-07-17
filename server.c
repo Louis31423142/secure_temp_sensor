@@ -69,7 +69,6 @@ void configure_security(int security_setting) {
 
             sm_set_io_capabilities(IO_CAPABILITY_DISPLAY_ONLY);
             sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
-            sm_use_fixed_passkey_in_display_role(123456);
 
             break;
 
@@ -146,7 +145,7 @@ void sm_packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, 
                     // for testing, choose one of the following actions
 
                     // manually start pairing
-                    // sm_request_pairing(con_handle);
+                    sm_request_pairing(con_handle);
 
                     // gatt client request to authenticated characteristic in sm_pairing_central (short cut, uses hard-coded value handle)
                     // gatt_client_read_value_of_characteristic_using_value_handle(&packet_handler, con_handle, 0x0009);
@@ -168,6 +167,14 @@ void sm_packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, 
             break;
         case SM_EVENT_PASSKEY_DISPLAY_NUMBER:
             printf("Display Passkey: %"PRIu32"\n", sm_event_passkey_display_number_get_passkey(packet));
+            break;
+        case SM_EVENT_PASSKEY_INPUT_NUMBER:
+            int passkey;
+            // need to type XXXXXXn into serial port. Also, bug where this only works once...
+            printf("Passkey Input requested\n");
+            scanf("%d", &passkey);
+            printf("Sending passkey %"PRIu32"\n", passkey);
+            sm_passkey_input(sm_event_passkey_input_number_get_handle(packet), passkey);
             break;
         case SM_EVENT_IDENTITY_CREATED:
             sm_event_identity_created_get_identity_address(packet, addr);

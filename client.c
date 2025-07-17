@@ -20,8 +20,6 @@
 #define LED_QUICK_FLASH_DELAY_MS 100
 #define LED_SLOW_FLASH_DELAY_MS 1000
 
-#define FIXED_PASSKEY 123456U
-
 typedef enum {
     TC_OFF,
     TC_IDLE,
@@ -44,6 +42,55 @@ static gatt_client_characteristic_t server_characteristic;
 static bool listener_registered;
 static gatt_client_notification_t notification_listener;
 static btstack_timer_source_t heartbeat;
+
+// Select a security setting to explore the BLE security
+// security setting 0: Just works (pairing), no MITM protection
+// security setting 1: Numeric comparison
+// security setting 2: Peripheral displays passkey, client enters passkey
+// security setting 3: Client displays passkey, peripheral enters passkey 
+int security_setting = 0;
+
+void configure_security(int security_setting) {
+
+    sm_set_secure_connections_only_mode(true);
+
+    switch (security_setting) {
+        case 0:
+            printf("Security setting 0 selected. \n");
+
+            sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
+            sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION);
+
+            break;
+        
+        case 1:
+            printf("Security setting 1 selected. \n");
+
+            sm_set_io_capabilities(IO_CAPABILITY_DISPLAY_YES_NO);
+            sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
+
+            break;
+
+        case 2:
+            printf("Security setting 2 selected. \n");
+
+            sm_set_io_capabilities(IO_CAPABILITY_KEYBOARD_ONLY);
+            sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
+
+            break;
+
+        case 3:
+            printf("Security setting 3 selected. \n");
+
+            sm_set_io_capabilities(IO_CAPABILITY_DISPLAY_ONLY);
+            sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
+
+            break;
+        
+        default:
+            break;
+    }
+}
 
 static void client_start(void){
     DEBUG_LOG("Start scanning!\n");
@@ -173,6 +220,8 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     UNUSED(channel);
     bd_addr_t local_addr;
     if (packet_type != HCI_EVENT_PACKET) return;
+    hci_con_handle_t con_handle;
+    uint8_t status;
 
     uint8_t event_type = hci_event_packet_get_type(packet);
     switch(event_type){
@@ -214,6 +263,43 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     break;
             }
             break;
+        case HCI_EVENT_META_GAP:
+            // wait for connection complete
+            if (hci_event_gap_meta_get_subevent_code(packet) != GAP_SUBEVENT_LE_CONNECTION_COMPLETE) break;
+            con_handle = gap_subevent_le_connection_complete_get_connection_handle(packet);
+            printf("Connection complete\n");
+
+            // for testing, choose one of the following actions
+
+            // manually start pairing
+            sm_request_pairing(con_handle);
+
+            // gatt client request to authenticated characteristic in sm_pairing_peripheral (short cut, uses hard-coded value handle)
+            // gatt_client_read_value_of_characteristic_using_value_handle(&hci_packet_handler, con_handle, 0x0009);
+
+            // general gatt client request to trigger mandatory authentication
+            // gatt_client_discover_primary_services(&hci_packet_handler, con_handle);
+            break;
+        case GATT_EVENT_QUERY_COMPLETE:
+            status = gatt_event_query_complete_get_att_status(packet);
+            switch (status){
+                case ATT_ERROR_INSUFFICIENT_ENCRYPTION:
+                    printf("GATT Query result: Insufficient Encryption\n");
+                    break;
+                case ATT_ERROR_INSUFFICIENT_AUTHENTICATION:
+                    printf("GATT Query result: Insufficient Authentication\n");
+                    break;
+                case ATT_ERROR_BONDING_INFORMATION_MISSING:
+                    printf("GATT Query result: Bonding Information Missing\n");
+                    break;
+                case ATT_ERROR_SUCCESS:
+                    printf("GATT Query result: OK\n");
+                    break;
+                default:
+                    printf("GATT Query result: 0x%02x\n", gatt_event_query_complete_get_att_status(packet));
+                    break;
+            }
+            break;
         case HCI_EVENT_DISCONNECTION_COMPLETE:
             // unregister listener
             connection_handle = HCI_CON_HANDLE_INVALID;
@@ -252,9 +338,12 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             printf("Display Passkey: %"PRIu32"\n", sm_event_passkey_display_number_get_passkey(packet));
             break;
         case SM_EVENT_PASSKEY_INPUT_NUMBER:
+            int passkey;
+            // need to type XXXXXXn into serial port. Also, bug where this only works once...
             printf("Passkey Input requested\n");
-            printf("Sending fixed passkey %"PRIu32"\n", (uint32_t) FIXED_PASSKEY);
-            sm_passkey_input(sm_event_passkey_input_number_get_handle(packet), FIXED_PASSKEY);
+            scanf("%d", &passkey);
+            printf("Sending passkey %"PRIu32"\n", passkey);
+            sm_passkey_input(sm_event_passkey_input_number_get_handle(packet), passkey);
             break;
         case SM_EVENT_PAIRING_STARTED:
             printf("Pairing started\n");
@@ -352,6 +441,9 @@ int main() {
 
     sm_event_callback_registration.callback = &sm_packet_handler;
     sm_add_event_handler(&sm_event_callback_registration);
+
+    // apply security configuration settings
+    configure_security(security_setting);
 
     // set one-shot btstack timer
     heartbeat.process = &heartbeat_handler;
