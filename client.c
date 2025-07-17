@@ -60,33 +60,25 @@ void configure_security(int security_setting) {
 
             sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
             sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION);
-
             break;
-        
         case 1:
             printf("Security setting 1 selected. \n");
 
             sm_set_io_capabilities(IO_CAPABILITY_DISPLAY_YES_NO);
             sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
-
             break;
-
         case 2:
             printf("Security setting 2 selected. \n");
 
             sm_set_io_capabilities(IO_CAPABILITY_KEYBOARD_ONLY);
             sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
-
             break;
-
         case 3:
             printf("Security setting 3 selected. \n");
 
             sm_set_io_capabilities(IO_CAPABILITY_DISPLAY_ONLY);
             sm_set_authentication_requirements(SM_AUTHREQ_SECURE_CONNECTION|SM_AUTHREQ_MITM_PROTECTION);
-
             break;
-        
         default:
             break;
     }
@@ -268,17 +260,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             if (hci_event_gap_meta_get_subevent_code(packet) != GAP_SUBEVENT_LE_CONNECTION_COMPLETE) break;
             con_handle = gap_subevent_le_connection_complete_get_connection_handle(packet);
             printf("Connection complete\n");
-
-            // for testing, choose one of the following actions
-
-            // manually start pairing
             sm_request_pairing(con_handle);
-
-            // gatt client request to authenticated characteristic in sm_pairing_peripheral (short cut, uses hard-coded value handle)
-            // gatt_client_read_value_of_characteristic_using_value_handle(&hci_packet_handler, con_handle, 0x0009);
-
-            // general gatt client request to trigger mandatory authentication
-            // gatt_client_discover_primary_services(&hci_packet_handler, con_handle);
             break;
         case GATT_EVENT_QUERY_COMPLETE:
             status = gatt_event_query_complete_get_att_status(packet);
