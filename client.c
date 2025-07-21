@@ -48,7 +48,7 @@ static btstack_timer_source_t heartbeat;
 // security setting 1: Numeric comparison
 // security setting 2: Peripheral displays passkey, client enters passkey
 // security setting 3: Client displays passkey, peripheral enters passkey 
-int security_setting = 0;
+int security_setting = 3;
 
 void configure_security(int security_setting) {
 
@@ -320,12 +320,14 @@ static void sm_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             printf("Display Passkey: %"PRIu32"\n", sm_event_passkey_display_number_get_passkey(packet));
             break;
         case SM_EVENT_PASSKEY_INPUT_NUMBER:
-            int passkey;
-            // need to type XXXXXXn into serial port. Also, bug where this only works once...
-            printf("Passkey Input requested\n");
-            scanf("%d", &passkey);
-            printf("Sending passkey %"PRIu32"\n", passkey);
-            sm_passkey_input(sm_event_passkey_input_number_get_handle(packet), passkey);
+            char passkey[7];
+
+            printf("Passkey Input requested \n");
+            scanf("%6[^\n]", passkey);
+            int to_send = atoi(passkey); // convert passkey to int
+
+            printf("Sending passkey %"PRIu32"\n", to_send);
+            sm_passkey_input(sm_event_passkey_input_number_get_handle(packet), to_send);
             break;
         case SM_EVENT_PAIRING_STARTED:
             printf("Pairing started\n");
